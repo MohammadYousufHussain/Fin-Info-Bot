@@ -1,4 +1,7 @@
 streamlit
 langchain
+langchain-community
 openai
 faiss-cpu
+tiktoken
+pandas
