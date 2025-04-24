@@ -5,13 +5,14 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.chat_models import ChatOpenAI
+from langchain.prompts import PromptTemplate
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 
 if "OPENAI_API_KEY" in st.secrets:
     os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
 else:
-    os.environ["OPENAI_API_KEY"] = open("source/openai_key.txt", "r").read().strip()
+    os.environ["OPENAI_API_KEY"] = open("../source/openai_key.txt", "r").read().strip()
 
 @st.cache_resource
 def load_chain():
@@ -30,12 +31,25 @@ def load_chain():
     # Memory
     memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
 
-    # QA Chain
+    # Custom system prompt
+    prompt = PromptTemplate.from_template("""
+You are a helpful financial analysis assistant.
+All financial values in the documents are in **Millions AED**.
+Always state that the figures are in Millions AED when providing your response.
+Provide detailed, concise, and professional financial commentary using only the context retrieved.
+If unsure or context is insufficient, say so instead of guessing.
+
+Question: {question}
+""")
+
+
+    # QA Chain with custom prompt
     retriever = vectorstore.as_retriever()
     chain = ConversationalRetrievalChain.from_llm(
         llm=ChatOpenAI(model_name="gpt-4-turbo"),
         retriever=retriever,
         memory=memory,
+        combine_docs_chain_kwargs={"prompt": prompt},
     )
     return chain
 
@@ -54,9 +68,17 @@ if "chat_history" not in st.session_state:
 user_query = st.chat_input("Ask something about the financial metrics...")
 
 if user_query:
-    response = qa_chain.run({"question": user_query})
+    result = qa_chain.invoke({"question": user_query})
+    answer = result["answer"]
+    source_docs = result["source_documents"]
     st.session_state.chat_history.append(("You", user_query))
     st.session_state.chat_history.append(("RAG Agent", response))
+
+    # Optional: Show source document excerpts
+    with st.expander("🔍 Sources used for this answer"):
+        for i, doc in enumerate(source_docs):
+            st.markdown(f"**Source {i+1}:**")
+            st.code(doc.page_content.strip())
 
 # Show history
 for sender, msg in st.session_state.chat_history:
