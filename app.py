@@ -8,8 +8,10 @@ from langchain.chat_models import ChatOpenAI
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 
-# Set OpenAI key
-os.environ["OPENAI_API_KEY"] = open("../source/openai_key.txt", "r").read().strip()
+if "OPENAI_API_KEY" in st.secrets:
+    os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
+else:
+    os.environ["OPENAI_API_KEY"] = open("source/openai_key.txt", "r").read().strip()
 
 @st.cache_resource
 def load_chain():
