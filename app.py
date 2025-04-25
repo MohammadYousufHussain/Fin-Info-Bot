@@ -9,74 +9,79 @@ from langchain.prompts import PromptTemplate
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 
-
+# Set OpenAI key
 if "OPENAI_API_KEY" in st.secrets:
     os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
 else:
     os.environ["OPENAI_API_KEY"] = open("../../source/openai_key.txt", "r").read().strip()
 
+# Load chain
 @st.cache_resource
 def load_chain():
-    # Load documents
     loader = CSVLoader(file_path="income_statement.csv")
     documents = loader.load()
-
-    # Split into chunks
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     chunks = text_splitter.split_documents(documents)
-
-    # Create vector store
     embeddings = OpenAIEmbeddings()
     vectorstore = FAISS.from_documents(chunks, embeddings)
-
-    # Memory
     memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
 
-    # Custom prompt
-    prompt_template = PromptTemplate.from_template("""
-    You are a helpful financial analysis assistant.
-    All financial values in the documents are in **Millions AED**.
-    Always mention this unit in your response.
-    Provide detailed, concise, and professional commentary using only the context retrieved.
-    If unsure or context is insufficient, say so instead of guessing.
+    # Custom system prompt
+    prompt = PromptTemplate(
+    input_variables=["context", "question"],
+    template="""
+You are a helpful financial analysis assistant.
+All financial values in the documents are in **Millions AED**.
+Always state that the figures are in Millions AED when providing your response.
+Provide detailed, concise, and professional financial commentary using only the context retrieved below.
+If unsure or context is insufficient, say so instead of guessing.
 
-    Context:
-    {context}
+Context:
+{context}
 
-    Question:
-    {question}
-    """)
+Question:
+{question}
+"""
+)
 
-    # Create chain with custom prompt
-    retriever = vectorstore.as_retriever()
-    chain = ConversationalRetrievalChain.from_llm(
+    return ConversationalRetrievalChain.from_llm(
         llm=ChatOpenAI(model_name="gpt-4-turbo"),
-        retriever=retriever,
+        retriever=vectorstore.as_retriever(),
         memory=memory,
-        combine_docs_chain_kwargs={"prompt": prompt_template}
+        combine_docs_chain_kwargs={"prompt": prompt}
     )
-    return chain
 
-# Streamlit UI
+# UI config
 st.set_page_config(page_title="Fin Info Bot", layout="wide")
-st.title("📊 Emirates NBD Fin Info Bot")
 
-# Initialize chain
-qa_chain = load_chain()
+# Sidebar tabs
+tab = st.sidebar.radio("📂 Navigation", ["Home", "Chat with FinBot", "About"])
 
-# Session chat history
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
+# Tab content logic
+if tab == "Home":
+    st.title("🏠 Welcome to Fin Info Bot")
+    st.markdown("This tool helps analyze Emirates NBD's financials using AI. Navigate to 'Chat with FinBot' to begin.")
+elif tab == "Chat with FinBot":
+    st.title("📊 Emirates NBD Fin Info Bot")
+    qa_chain = load_chain()
+    
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
 
-# Chat input
-user_query = st.chat_input("Ask something about the income statement...")
+    user_query = st.chat_input("Ask something about financial metrics...")
+    if user_query:
+        response = qa_chain.run({"question": user_query})
+        st.session_state.chat_history.append(("You", user_query))
+        st.session_state.chat_history.append(("RAG Agent", response))
 
-if user_query:
-    response = qa_chain.run({"question": user_query})
-    st.session_state.chat_history.append(("You", user_query))
-    st.session_state.chat_history.append(("RAG Agent", response))
-
-# Show history
-for sender, msg in st.session_state.chat_history:
-    with st.chat_message(sender):
-        st.markdown(msg)
+    for sender, msg in st.session_state.chat_history:
+        with st.chat_message(sender):
+            st.markdown(msg)
+elif tab == "About":
+    st.title("ℹ️ About This App")
+    st.markdown("""
+This Streamlit app uses LangChain + OpenAI to help you explore financial data.
+- Built with ❤️ by Agentic AI.
+- Data is processed into embeddings and made chat-ready using Retrieval-Augmented Generation (RAG).
+- All amounts are in **Millions AED**.
+    """)
