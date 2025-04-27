@@ -28,7 +28,7 @@ def insert_paragraphs(text, sentences_per_paragraph=3):
         paragraph = ' '.join(sentences[i:i+sentences_per_paragraph])
         paragraphs.append(paragraph)
     return paragraphs  # NOTE: return list of paragraphs
-    
+
 
 # Set OpenAI key
 if "OPENAI_API_KEY" in st.secrets:
@@ -55,7 +55,7 @@ def load_chain():
     prompt = PromptTemplate(
     input_variables=["context", "question", "role", "detail", "focus"],
     template="""
-You are a helpful financial analysis assistant.
+You are a helpful financial analysis assistant. Today is 27thMarch 2025
 
 Frequently used synonyms you should be aware of:
 - "NIMs" = "Net Interest Margins"
