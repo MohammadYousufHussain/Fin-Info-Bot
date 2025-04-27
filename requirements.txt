@@ -5,6 +5,6 @@ openai
 faiss-cpu
 tiktoken
 pandas
-langchain_experimental
+langchain-experimental==0.3.4
 time
 re
