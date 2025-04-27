@@ -6,4 +6,3 @@ faiss-cpu
 tiktoken
 pandas
 langchain-experimental==0.3.4
-re
