@@ -18,6 +18,8 @@ import time
 import re
 from langchain.document_loaders import UnstructuredWordDocumentLoader
 import json
+from pathlib import Path
+from PIL import Image
 
 
 st.sleep = time.sleep  # Allow st.sleep for smoothness
@@ -26,6 +28,10 @@ st.sleep = time.sleep  # Allow st.sleep for smoothness
 # Load metadata once
 with open("image_metadata.json", "r") as f:
     image_meta = json.load(f)
+
+
+# Define the base directory
+BASE_DIR = Path(__file__).resolve().parent
 
 
 @st.cache_resource
@@ -360,7 +366,13 @@ elif tab == "Chat with FinBot":
                     for tag in suggested_tags:
                         if tag in image_meta:
                             img_info = image_meta[tag]
-                            st.image(img_info["file"], caption=img_info["caption"], use_column_width=True)
+                            # Construct full path using BASE_DIR
+                            image_path = BASE_DIR / img_info["file"]
+                            try:
+                                image = Image.open(image_path)
+                                st.image(image, caption=img_info["caption"], use_column_width=True)
+                            except FileNotFoundError:
+                                st.error(f"Image not found: {image_path}")
         # Save final streamed response to history
         st.session_state.chat_history.append(("RAG Agent", full_response))
 elif tab == "About":
