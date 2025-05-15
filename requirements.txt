@@ -8,3 +8,4 @@ pandas
 langchain-experimental==0.3.4
 matplotlib
 tabulate
+unstructured
