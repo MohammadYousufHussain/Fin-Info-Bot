@@ -370,7 +370,7 @@ elif tab == "Chat with FinBot":
                             image_path = BASE_DIR / img_info["file"]
                             try:
                                 image = Image.open(image_path)
-                                st.image(image, caption=img_info["caption"], use_column_width=True)
+                                st.image(image, caption=img_info["caption"], use_container_width=True)
                             except FileNotFoundError:
                                 st.error(f"Image not found: {image_path}")
         # Save final streamed response to history
