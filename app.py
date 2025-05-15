@@ -281,7 +281,7 @@ focus = st.sidebar.selectbox(
 # Reset button with full state reset
 if st.sidebar.button("🔄 Reset Chat & Settings"):
     st.session_state.clear()
-    st.experimental_rerun()
+    st.rerun()
 st.sidebar.markdown("---")
 
 # Sidebar tabs
