@@ -1,0 +1,4 @@
+bank,primary_metric,level of hierarchy,Level,metric name,comments,2020,2021,2022,2023,2024
+Emirates NBD (ENBD),Net Interest Margin,Level 0. This top level stat,overall summary,Emirates NBD YTD Net Interest Margin (NIM),This metric is in %,2.65%,2.53%,3.43%,3.95%,3.64%
+First Abu Dhabi Bank (FAB),Net Interest Margin,Level 0. This top level stat,overall summary,First Abu Dhabi (FAB) YTD Net Interest Margin (NIM),This metric is in %,1.62%,1.46%,1.59%,1.80%,1.93%
+Federal Reserve,Net Interest Margin,Level 0. This top level stat,overall summary,Federal Funds Rate,This metric is in %. Net Interest Margin (NIM) is closely linked to Federal Funds Rate.,0.25%,0.25%,4.50%,5.50%,4.50%

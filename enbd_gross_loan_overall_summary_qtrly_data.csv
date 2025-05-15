@@ -1,0 +1,6 @@
+bank,primary_metric,metric name,Comments,Q4-23,Q1-24,Q2-24,Q3-24,Q4-24
+Emirates NBD,gross loan,Emirates NBD gross loan aggregates,This is the toal gross loan aggregate of Emirates NBD including its subsidaries.,481,492,508,525,529
+Emirates NBD,gross loan,Corporate loans,This the total gross loan given to Croporates,212,218,226,232,231
+Emirates NBD,gross loan,Retail loans,This is the total gross loan given to Retail,114,122,130,140,148
+Emirates NBD,gross loan,Sovereign loans,This is the total gross loan given to Sovereigns,81,77,72,70,66
+Emirates NBD,gross loan,DenizBank loans,This is the total gross loan given by DenizBank,74,75,80,83,84

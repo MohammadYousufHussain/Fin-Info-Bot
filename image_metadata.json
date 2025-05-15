@@ -1,0 +1,7 @@
+{
+  "total_gross_loan": {"file": "total_gross_loan_trend.png", "caption": "Gross Loan Trend"},
+  "loan_products": {"file": "loan_product_table.png", "caption": "Loans and Receivables"},
+  "industry_exposure": {"file": "loan_exposure_by_industry.png", "caption": "Credit Exposure by Industry"},
+  "nim_trend": {"file": "nim_trend.png", "caption": "Emirates NBD NIM Trend"},
+  "fab_nim_comparison": {"file": "enbd_fab_nim_trend.png", "caption": "ENBD and FAB NIM Comparison"}
+}

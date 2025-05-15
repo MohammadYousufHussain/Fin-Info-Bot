@@ -16,12 +16,60 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import time
 import re
+from langchain.document_loaders import UnstructuredWordDocumentLoader
+import json
 
 
 st.sleep = time.sleep  # Allow st.sleep for smoothness
 
 
-def insert_paragraphs(text, sentences_per_paragraph=3):
+# Load metadata once
+with open("image_metadata.json", "r") as f:
+    image_meta = json.load(f)
+
+
+@st.cache_resource
+def get_llm():
+    return ChatOpenAI(model_name="gpt-4-turbo", temperature=0)
+
+
+def image_suggester_agent(response_text):
+    tag_prompt = f"""
+    You are an assistant that analyzes financial explanations and recommends the most relevant image tag(s) from the list below.
+
+    Available tags:
+    - total_gross_loan
+    - loan_products
+    - industry_exposure
+    - nim_trend
+    - fab_nim_comparison
+
+    Based on the following response, return the most relevant tag(s) as a Python list of strings (max 3 tags):
+    ---
+    {response_text}
+    ---
+    """
+    llm = get_llm()
+    tag_output = llm.predict(tag_prompt)
+    print('Image suggested tags: ', tag_output)
+
+    # Clean up formatting
+    if isinstance(tag_output, str):
+        tag_output = tag_output.strip()
+        if tag_output.startswith("```"):
+            tag_output = tag_output.strip("`").split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+
+    try:
+        tags = eval(tag_output)
+        if isinstance(tags, list):
+            return tags
+    except Exception as e:
+        print("Error evaluating tags:", e)
+
+    return []
+
+
+def insert_paragraphs(text, sentences_per_paragraph=1):
     sentences = re.split(r'(?<=[.!?]) +', text)  # Split at end of sentence
     paragraphs = []
     for i in range(0, len(sentences), sentences_per_paragraph):
@@ -39,64 +87,165 @@ else:
 # Load chain
 @st.cache_resource
 def load_chain():
-    # Load and chunk documents
-    loader = CSVLoader(file_path="financial_data.csv")
-    documents = loader.load()
+    # Load High Level Gross Loan Quarterly Info - Emirates NBD
+    gross_loan_hl_loader = CSVLoader(file_path="enbd_gross_loan_overall_summary_qtrly_data.csv")
+    gross_loan_hl_docs = gross_loan_hl_loader.load()
+    for doc in gross_loan_hl_docs:
+        doc.metadata["level of detail"] = "High level Summary View"
+        doc.metadata["metric"] = "gross loan"
+        doc.metadata["time frequency"] = "quarterly"
+        doc.metadata["bank"] = "Emirates NBD"
 
+    # Load Product and Industry Level Gross Loan Quarterly Info - Emirates NBD
+    gross_loan_product_details_loader = CSVLoader(file_path="enbd_gross_loan_product_details.csv")
+    gross_loan_product_details_docs = gross_loan_product_details_loader.load()
+    for doc in gross_loan_product_details_docs:
+        doc.metadata["level of detail"] = "Product and industry level details"
+        doc.metadata["metric"] = "gross loan"
+        doc.metadata["time frequency"] = "yearly"
+        doc.metadata["bank"] = "Emirates NBD"
+
+
+    # Load NIMs data for ENBD and FAB
+    nims_data_loader = CSVLoader(file_path="nims_data_yearly.csv")
+    nims_docs = nims_data_loader.load()
+    for doc in nims_docs:
+        doc.metadata["level of detail"] = "high level summary. bank level comparison"
+        doc.metadata["metric"] = "net interest margin (NIMs)"
+        doc.metadata["time frequency"] = "yearly"
+        doc.metadata["bank"] = "Emirates NBD (ENBD), First Abu Dhabi Bank (FAB)"
+
+
+    # Load DOCX
+    word_loader = UnstructuredWordDocumentLoader("fs_notes_demo.docx")
+    word_docs = word_loader.load()
+
+    # Merge both
+    documents = gross_loan_hl_docs + gross_loan_product_details_docs + word_docs + nims_docs
+
+    # Continue with chunking
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     chunks = text_splitter.split_documents(documents)
 
-    # Embedding + retrieval setup
+    # Embed and index
     embeddings = OpenAIEmbeddings()
     vectorstore = FAISS.from_documents(chunks, embeddings)
     retriever = vectorstore.as_retriever()
 
     # Prompt
-    prompt = PromptTemplate(
-    input_variables=["context", "question", "role", "detail", "focus"],
+#     prompt = PromptTemplate(
+#     input_variables=["context", "question", "role", "detail", "focus"],
+#     template="""
+# You are a helpful financial analysis assistant. Today is 5th Jan 2025
+
+# Frequently used synonyms you should be aware of:
+# - "NIMs" = "Net Interest Margins"
+# - "Net Interest Income" = "NII"
+# - "Operating Income" = "Total Income"
+# - "CASA Ratio" = "Current and Savings Account Ratio"
+# - etc.
+
+# If a question uses a synonym, you must correctly interpret it according to the above mappings.
+
+# Respond based on the selected role:
+# - If the role is **Report**, provide a brief, high-level executive summary. Only use Emirates NBD data.
+# - If the role is **Analyze**, provide:
+#      - a deep-dive, detailed analysis. Only use Emirates NBD data.
+#      - provide percentages changes in metrics across time periods
+#      - start with high level changes in the metrics and then provide detailed analysis at business unit level 
+# - If the role is **Industry Research**, provide detailed analysis comparing peer banks (Emirates NBD, FAB, ADCB, Al Rajhi Bank).
+
+# Ensure the tone, length, and complexity align with the chosen role.
+
+# Important formatting rules for your answer:
+# - After every 2 to 3 sentences, insert a line break (`\\n\\n`) to create a new paragraph.
+# - Keep related ideas together in the same paragraph.
+# - Ensure the response is clean, professional, and easy to read.
+
+# Other instructions:
+# - All financial values in the documents are in **Billions AED**.
+# - Always state that figures are in Millions AED when providing your response.
+# - If unsure or if context is insufficient, say so clearly instead of guessing.
+
+# Use ONLY the provided context below to answer.
+
+# Context:
+# {context}
+
+# Question:
+# {question}
+# """
+# )
+
+    prompt_intro = PromptTemplate(
+    input_variables=["context", "question"],
     template="""
-You are a helpful financial analysis assistant. Today is 27thMarch 2025
+You are **Fin Info Bot**, a helpful assistant that provides structured financial insights on Emirates NBD. Today is 5th January 2025.
 
-Frequently used synonyms you should be aware of:
-- "NIMs" = "Net Interest Margins"
-- "Net Interest Income" = "NII"
-- "Operating Income" = "Total Income"
-- "CASA Ratio" = "Current and Savings Account Ratio"
-- etc.
+Your response must follow this structure:
+1. **High-level Overview (Group Level)**: Provide a concise summary of how the key financial metric have changed. Keep the insight at Level 0.  Include the total change, key percentage movements, and broad trends.
+2. **Detailed Metric Variance Analysis**: Break down the change across Level 1 associated metrics that explain or contribute to change in the financial metric. This includes growth by business unit —based on available context.
 
-If a question uses a synonym, you must correctly interpret it according to the above mappings.
+Important emphasis:
+- Include **percentage changes** and **actual values** wherever the context allows.
+- If context is insufficient to explain certain aspects, clearly state that without guessing.
 
-Respond based on the selected role:
-- If the role is **Report**, provide a brief, high-level executive summary. Only use Emirates NBD data.
-- If the role is **Analyze**, provide a deep-dive, detailed analysis. Only use Emirates NBD data.
-- If the role is **Industry Research**, provide detailed analysis comparing peer banks (Emirates NBD, FAB, ADCB, Al Rajhi Bank).
-
-Ensure the tone, length, and complexity align with the chosen role.
-
-Important formatting rules for your answer:
-- After every 2 to 3 sentences, insert a line break (`\\n\\n`) to create a new paragraph.
-- Keep related ideas together in the same paragraph.
-- Ensure the response is clean, professional, and easy to read.
+Formatting and tone:
+- Use a professional, analytical tone.
+- Break the response into **paragraphs** by adding a blank line between every 2–3 sentences.ame paragraph.
+- Ensure the response is well-structured and easy to follow.
 
 Other instructions:
-- All financial values in the documents are in **Millions AED**.
-- Always state that figures are in Millions AED when providing your response.
-- If unsure or if context is insufficient, say so clearly instead of guessing.
-
-Use ONLY the provided context below to answer.
+- Interpret financial synonyms correctly (e.g., "NIMs" = "Net Interest Margins", "NII" = "Net Interest Income", etc.).
+- All figures in the source data are in **Billions AED** unless otherwise stated.
+- When writing values in the response, use **Millions AED**.
+- Stick strictly to the provided context. Do not guess.
 
 Context:
 {context}
 
 Question:
 {question}
+
 """
 )
 
-    llm = ChatOpenAI(model_name="gpt-4-turbo")
-    chain = LLMChain(llm=llm, prompt=prompt)
+    prompt_convo = PromptTemplate(
+    input_variables=["context", "question"],
+    template="""
+You are **Fin Info Bot**, a helpful assistant that provides structured financial insights on Emirates NBD. Today is 5th January 2025.
 
-    return retriever, chain
+
+Important emphasis:
+- Include **percentage changes** and **actual values** wherever the context allows.
+- If context is insufficient to explain certain aspects, clearly state that without guessing.
+
+Formatting and tone:
+- Use a professional, analytical tone.
+- Break the response into **paragraphs** by adding a blank line between every 2–3 sentences.
+- Keep related ideas grouped in the same paragraph.
+- Ensure the response is well-structured and easy to follow.
+
+Other instructions:
+- Interpret financial synonyms correctly (e.g., "NIMs" = "Net Interest Margins", "NII" = "Net Interest Income", etc.).
+- All figures in the source data are in **Billions AED** unless otherwise stated.
+- Stick strictly to the provided context. Do not guess.
+
+Context:
+{context}
+
+Question:
+{question}
+
+"""
+)
+
+    #llm = ChatOpenAI(model_name="gpt-4-turbo")
+    llm = get_llm()
+    chain_intro = LLMChain(llm=llm, prompt=prompt_intro)
+    chain_convo = LLMChain(llm=llm, prompt=prompt_convo)
+
+    return retriever, chain_intro, chain_convo
 
 # UI config
 st.set_page_config(page_title="Fin Info Bot", layout="wide")
@@ -138,7 +287,7 @@ if tab == "Home":
     st.markdown("This tool helps analyze Emirates NBD's financials using AI. Navigate to 'Chat with FinBot' to begin.")
 elif tab == "Chat with FinBot":
     st.title("📊 Emirates NBD Fin Info Bot")
-    retriever, qa_chain = load_chain()
+    retriever, chain_intro, chain_convo = load_chain()
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
@@ -166,6 +315,8 @@ elif tab == "Chat with FinBot":
             context = "\n\n".join(doc.page_content for doc in docs)
 
             # Run LLMChain with prompt vars
+            qa_chain = chain_intro if len(st.session_state.chat_history) == 1 else chain_convo
+
             bot_response = qa_chain.run({
                 "context": context,
                 "question": user_query,
@@ -174,24 +325,44 @@ elif tab == "Chat with FinBot":
                 "focus": st.session_state.focus
             })
 
-            # Insert paragraphs (after 2-3 sentences each)
-            paragraphs = insert_paragraphs(bot_response)
+            # # Insert paragraphs (after 2-3 sentences each)
+            # paragraphs = insert_paragraphs(bot_response)
 
             # --- Stream Final Answer LIVE ---
+            # with st.chat_message("RAG Agent"):
+            #     answer_placeholder = st.empty()
+            #     full_streamed_answer = ""
+
+            #     for paragraph in paragraphs:
+            #         words = paragraph.split()
+            #         for word in words:
+            #             full_streamed_answer += word + " "
+            #             answer_placeholder.markdown(full_streamed_answer)
+            #             st.sleep(0.02)
             with st.chat_message("RAG Agent"):
-                answer_placeholder = st.empty()
-                full_streamed_answer = ""
+                col1, col2 = st.columns([2, 1])  # 2:1 width ratio
 
-                for paragraph in paragraphs:
-                    words = paragraph.split()
-                    for word in words:
-                        full_streamed_answer += word + " "
-                        answer_placeholder.markdown(full_streamed_answer)
-                        st.sleep(0.02)
-                    full_streamed_answer += "\n\n"  # Add extra line between paragraphs
+                with col1:
+                    answer_placeholder = st.empty()
+                    full_response = ""
+                    paragraphs = bot_response.split("\n\n")  # Split into logical paragraphs
 
+                    for para in paragraphs:
+                        full_response += para + "\n\n"
+                        answer_placeholder.markdown(full_response)
+                        st.sleep(0.3)
+
+                # Suggest images using LLM agent
+                suggested_tags = image_suggester_agent(bot_response)
+                print("Suggested tags:", suggested_tags)
+
+                with col2:
+                    for tag in suggested_tags:
+                        if tag in image_meta:
+                            img_info = image_meta[tag]
+                            st.image(img_info["file"], caption=img_info["caption"], use_column_width=True)
         # Save final streamed response to history
-        st.session_state.chat_history.append(("RAG Agent", full_streamed_answer))
+        st.session_state.chat_history.append(("RAG Agent", full_response))
 elif tab == "About":
     st.title("ℹ️ About This App")
     st.markdown("""
@@ -297,4 +468,6 @@ elif tab == "Explore with FinAgent":
             if fig.get_axes():
                 st.pyplot(fig)
                 plt.clf()
+
+
 
