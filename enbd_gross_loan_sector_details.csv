@@ -1,0 +1,16 @@
+primary_metric,Level,metric name,Q4-23 (Gross Loan Value),Q4-23 (Gross Loan %),Q4-24 (Gross Loan Value),Q4-24 (Gross Loan %),Yearly Change 2024 (%),Weightage of Growth 2024
+gross loan,overall summary,Overall Gross Loan,481,100%,529,100%,10%,10%
+gross loan,sector level loan exposure,Personal,132.7,28%,161.2,30%,21%,6%
+gross loan,sector level loan exposure,Sovereign,81.4,17%,66.5,13%,-18%,-3%
+gross loan,sector level loan exposure,Real Estate,45.6,9%,46.4,9%,2%,0%
+gross loan,sector level loan exposure,Transport and Communication,32.8,7%,40.6,8%,24%,2%
+gross loan,sector level loan exposure,Management of companies and enterprises,37.7,8%,36.2,7%,-4%,0%
+gross loan,sector level loan exposure,Trade,32.4,7%,35,7%,8%,1%
+gross loan,sector level loan exposure,Financial institutions and investment companies,23.2,5%,31.5,6%,36%,2%
+gross loan,sector level loan exposure,Manufacturing,28.3,6%,29.1,6%,3%,0%
+gross loan,sector level loan exposure,Utilities and Services,27.7,6%,26.8,5%,-3%,0%
+gross loan,sector level loan exposure,Others,16.9,4%,21.8,4%,29%,1%
+gross loan,sector level loan exposure,Agriculture,4.4,1%,16.3,3%,270%,2%
+gross loan,sector level loan exposure,Hotels and Restaurants,9.5,2%,12.3,2%,29%,1%
+gross loan,sector level loan exposure,Construction,11.5,2%,10.6,2%,-8%,0%
+gross loan,sector level loan exposure,Deferred Income,-3.1,-1%,-5.3,-1%,71%,0%

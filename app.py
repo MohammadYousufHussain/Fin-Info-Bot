@@ -46,11 +46,11 @@ def image_suggester_agent(response_text):
     Available tags:
     - total_gross_loan
     - loan_products
-    - industry_exposure
+    - sector_exposure
     - nim_trend
     - fab_nim_comparison
 
-    Based on the following response, return the most relevant tag(s) as a Python list of strings (max 3 tags):
+    Based on the following response, return the most relevant tag(s) as a Python list of strings (max 2 tags):
     ---
     {response_text}
     ---
@@ -102,11 +102,21 @@ def load_chain():
         doc.metadata["time frequency"] = "quarterly"
         doc.metadata["bank"] = "Emirates NBD"
 
-    # Load Product and Industry Level Gross Loan Quarterly Info - Emirates NBD
+    # Load Product Level Gross Loan Quarterly Info - Emirates NBD
     gross_loan_product_details_loader = CSVLoader(file_path="enbd_gross_loan_product_details.csv")
     gross_loan_product_details_docs = gross_loan_product_details_loader.load()
     for doc in gross_loan_product_details_docs:
-        doc.metadata["level of detail"] = "Product and industry level details"
+        doc.metadata["level of detail"] = "Product level details"
+        doc.metadata["metric"] = "gross loan"
+        doc.metadata["time frequency"] = "yearly"
+        doc.metadata["bank"] = "Emirates NBD"
+
+
+    # Load Sector Level Gross Loan Quarterly Info - Emirates NBD
+    gross_loan_sector_details_loader = CSVLoader(file_path="enbd_gross_loan_sector_details.csv")
+    gross_loan_sector_details_docs = gross_loan_sector_details_loader.load()
+    for doc in gross_loan_sector_details_docs:
+        doc.metadata["level of detail"] = "Sector level details"
         doc.metadata["metric"] = "gross loan"
         doc.metadata["time frequency"] = "yearly"
         doc.metadata["bank"] = "Emirates NBD"
@@ -127,7 +137,7 @@ def load_chain():
     word_docs = word_loader.load()
 
     # Merge both
-    documents = gross_loan_hl_docs + gross_loan_product_details_docs + word_docs + nims_docs
+    documents = gross_loan_hl_docs + gross_loan_product_details_docs + gross_loan_sector_details_docs + word_docs + nims_docs
 
     # Continue with chunking
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
@@ -371,6 +381,7 @@ elif tab == "Chat with FinBot":
                             try:
                                 image = Image.open(image_path)
                                 st.image(image, caption=img_info["caption"], use_container_width=True)
+                                #st.image(image, caption=img_info["caption"], use_column_width=True)
                             except FileNotFoundError:
                                 st.error(f"Image not found: {image_path}")
         # Save final streamed response to history

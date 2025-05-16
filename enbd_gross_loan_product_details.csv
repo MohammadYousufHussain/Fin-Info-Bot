@@ -1,20 +1,6 @@
 primary_metric,Level,metric name,Q4-23,Q4-24
-gross loan,overall summary,expected credit losses,35.7,27.5
 gross loan,product level detail,overdrafts,22.9,21.1
 gross loan,product level detail,time loans,326.3,344.9
 gross loan,product level detail,loan against trust receipts,8.2,9.7
 gross loan,product level detail,bills discounted,8,9.2
 gross loan,product level detail,credit card receivables,24.4,26.2
-gross loan,industry level loan exposure,Manufacturing,28.3,29.1
-gross loan,industry level loan exposure,Construction,11.5,10.6
-gross loan,industry level loan exposure,Trade,32.4,35
-gross loan,industry level loan exposure,Transport and Communication,32.8,40.6
-gross loan,industry level loan exposure,Utilities and Services,27.7,26.8
-gross loan,industry level loan exposure,Sovereign,81.4,66.5
-gross loan,industry level loan exposure,Personal,132.7,161.2
-gross loan,industry level loan exposure,Real Estate,45.6,46.4
-gross loan,industry level loan exposure,Hotels and Restaurants,9.5,12.3
-gross loan,industry level loan exposure,Management of companies and enterprises,37.7,36.2
-gross loan,industry level loan exposure,Financial institutions and investment companies,23.2,31.5
-gross loan,industry level loan exposure,Agriculture,4.4,16.3
-gross loan,industry level loan exposure,Others,16.9,21.8
