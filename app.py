@@ -20,7 +20,8 @@ from langchain.document_loaders import UnstructuredWordDocumentLoader
 import json
 from pathlib import Path
 from PIL import Image
-
+import openai
+from openai import OpenAI
 
 st.sleep = time.sleep  # Allow st.sleep for smoothness
 
@@ -36,7 +37,43 @@ BASE_DIR = Path(__file__).resolve().parent
 
 @st.cache_resource
 def get_llm():
-    return ChatOpenAI(model_name="gpt-4-turbo", temperature=0)
+    return ChatOpenAI(model_name="gpt-4-turbo", temperature=0, streaming=True)
+
+
+prompt_intro_template = """You are a financial assistant helping users with information.
+
+Context:
+{context}
+
+User Question:
+{question}
+
+Additional Info:
+- Role: {role}. If the role is Financial Reporter, provide information with limited insights. If the role is Research Analyst, then provide detailed insights.
+- Detail: {detail}. If detail is less than 4, provide very brief response and if higher than 7 then provide very detailed response.
+- Focus: {focus}
+Today is 5th January 2025.
+All figures in the source data are in **Billions AED** unless otherwise stated.
+
+Answer in a helpful and professional tone."""
+
+
+prompt_convo_template = """Continue assisting the user in a financial conversation.
+
+Context:
+{context}
+
+User Question:
+{question}
+
+Additional Info:
+- Role: {role}. If the role is Financial Reporter, provide information with limited insights. If the role is Research Analyst, then provide detailed insights.
+- Detail: {detail}. If detail is less than 4, provide very brief response and if higher than 7 then provide very detailed response.
+- Focus: {focus}
+Today is 5th January 2025.
+All figures in the source data are in **Billions AED** unless otherwise stated.
+
+Keep responses focused and structured."""
 
 
 def image_suggester_agent(response_text):
@@ -89,6 +126,8 @@ if "OPENAI_API_KEY" in st.secrets:
     os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
 else:
     os.environ["OPENAI_API_KEY"] = open("../../source/openai_key.txt", "r").read().strip()
+
+client = OpenAI()  # uses env var OPENAI_API_KEY
 
 # Load chain
 @st.cache_resource
@@ -196,7 +235,7 @@ def load_chain():
     prompt_intro = PromptTemplate(
     input_variables=["context", "question"],
     template="""
-You are **Fin Info Bot**, a helpful assistant that provides structured financial insights on Emirates NBD. Today is 5th January 2025.
+You are **Fin Info Bot**, a helpful assistant that provides structured financial insights on Emirates NBD. Today is 5th January 2025. Provide brief concise responses.
 
 Your response must follow this structure:
 1. **High-level Overview (Group Level)**: Provide a concise summary of how the key financial metric have changed. Keep the insight at Level 0.  Include the total change, key percentage movements, and broad trends.
@@ -229,7 +268,7 @@ Question:
     prompt_convo = PromptTemplate(
     input_variables=["context", "question"],
     template="""
-You are **Fin Info Bot**, a helpful assistant that provides structured financial insights on Emirates NBD. Today is 5th January 2025.
+You are **Fin Info Bot**, a helpful assistant that provides structured financial insights on Emirates NBD. Today is 5th January 2025. Provide brief concise responses.
 
 
 Important emphasis:
@@ -268,9 +307,9 @@ st.set_page_config(page_title="Fin Info Bot", layout="wide")
 
 # Initialize default settings
 if "role" not in st.session_state:
-    st.session_state.role = "Report"
+    st.session_state.role = "Financial Reporter"
 if "detail" not in st.session_state:
-    st.session_state.detail = 5
+    st.session_state.detail = 2
 if "focus" not in st.session_state:
     st.session_state.focus = "All"
 
@@ -279,7 +318,7 @@ st.sidebar.title("🤖 Fin Info Bot")
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Response Settings")
 
-role = st.sidebar.selectbox("Role", ["Report", "Analyze", "Industry Research"], index=["Report", "Analyze", "Industry Research"].index(st.session_state.role), key="role")
+role = st.sidebar.selectbox("Role", ["Financial Reporter", "Research Analyst"], index=["Financial Reporter", "Research Analyst"].index(st.session_state.role), key="role")
 detail = st.sidebar.slider("Level of Detail", 1, 10, st.session_state.detail, key="detail")
 focus = st.sidebar.selectbox(
     "Focus Area",
@@ -324,68 +363,123 @@ elif tab == "Chat with FinBot":
         # Save user message to history
         st.session_state.chat_history.append(("You", user_query))
 
-        # Thinking process
         with st.spinner("FinBot is thinking..."):
-            # Retrieve context
-            docs = retriever.get_relevant_documents(user_query)
-            context = "\n\n".join(doc.page_content for doc in docs)
+            # Retrieve context (reduce size for speed)
+            docs = retriever.get_relevant_documents(user_query)[:3]
+            context = "\n\n".join(doc.page_content[:1000] for doc in docs)
 
-            # Run LLMChain with prompt vars
-            qa_chain = chain_intro if len(st.session_state.chat_history) == 1 else chain_convo
+            # Choose prompt depending on chat history length
+            system_prompt_template = prompt_intro_template if len(st.session_state.chat_history) == 1 else prompt_convo_template
 
-            bot_response = qa_chain.run({
-                "context": context,
-                "question": user_query,
-                "role": st.session_state.role,
-                "detail": str(st.session_state.detail),
-                "focus": st.session_state.focus
-            })
-
-            # # Insert paragraphs (after 2-3 sentences each)
-            # paragraphs = insert_paragraphs(bot_response)
-
-            # --- Stream Final Answer LIVE ---
-            # with st.chat_message("RAG Agent"):
-            #     answer_placeholder = st.empty()
-            #     full_streamed_answer = ""
-
-            #     for paragraph in paragraphs:
-            #         words = paragraph.split()
-            #         for word in words:
-            #             full_streamed_answer += word + " "
-            #             answer_placeholder.markdown(full_streamed_answer)
-            #             st.sleep(0.02)
+            formatted_prompt = system_prompt_template.format(
+                context=context,
+                question=user_query,
+                role=st.session_state.role,
+                detail=str(st.session_state.detail),
+                focus=st.session_state.focus
+            )
+            # Stream response
             with st.chat_message("RAG Agent"):
-                col1, col2 = st.columns([2, 1])  # 2:1 width ratio
-
+                col1, col2 = st.columns([2, 1])
                 with col1:
-                    answer_placeholder = st.empty()
                     full_response = ""
-                    paragraphs = bot_response.split("\n\n")  # Split into logical paragraphs
+                    answer_placeholder = st.empty()
 
-                    for para in paragraphs:
-                        full_response += para + "\n\n"
+                    stream = client.chat.completions.create(
+                        model="gpt-4-turbo",
+                        messages=[
+                            {"role": "system", "content": formatted_prompt},
+                            {"role": "user", "content": user_query}
+                        ],
+                        stream=True,
+                    )
+
+                    for chunk in stream:
+                        token = chunk.choices[0].delta.content or ""
+                        full_response += token
                         answer_placeholder.markdown(full_response)
-                        st.sleep(0.3)
 
                 # Suggest images using LLM agent
-                suggested_tags = image_suggester_agent(bot_response)
-                print("Suggested tags:", suggested_tags)
-
+                suggested_tags = image_suggester_agent(full_response)
                 with col2:
                     for tag in suggested_tags:
                         if tag in image_meta:
                             img_info = image_meta[tag]
-                            # Construct full path using BASE_DIR
                             image_path = BASE_DIR / img_info["file"]
                             try:
                                 image = Image.open(image_path)
-                                st.image(image, caption=img_info["caption"], use_container_width=True)
-                                #st.image(image, caption=img_info["caption"], use_column_width=True)
+                                #st.image(image, caption=img_info["caption"], use_container_width=True)
+                                st.image(image, caption=img_info["caption"], use_column_width=True)
                             except FileNotFoundError:
                                 st.error(f"Image not found: {image_path}")
-        # Save final streamed response to history
+
+        # Save response to history
         st.session_state.chat_history.append(("RAG Agent", full_response))
+
+    # if user_query:
+    #     # Display user message
+    #     with st.chat_message("You"):
+    #         st.markdown(user_query)
+
+    #     # Save user message to history
+    #     st.session_state.chat_history.append(("You", user_query))
+
+    #     with st.spinner("FinBot is thinking..."):
+    #         # Retrieve context
+    #         docs = retriever.get_relevant_documents(user_query)[:2] #to control for size
+    #         context = "\n\n".join(doc.page_content[:1000] for doc in docs) # # only use first 1000 chars per doc 
+
+    #         # Choose the correct chain
+    #         #qa_chain = chain_intro if len(st.session_state.chat_history) == 1 else chain_convo
+    #         qa_chain = chain_convo if len(st.session_state.chat_history) == 1 else chain_convo
+
+    #          # Input for the prompt
+    #         inputs = {
+    #             "context": context,
+    #             "question": user_query,
+    #             "role": st.session_state.role,
+    #             "detail": str(st.session_state.detail),
+    #             "focus": st.session_state.focus
+    #         }
+
+    #         # Stream output using chain.stream()
+    #         with st.chat_message("RAG Agent"):
+    #             col1, col2 = st.columns([2, 1])
+
+    #             with col1:
+    #                 answer_placeholder = st.empty()
+    #                 full_response = ""
+
+    #                 try:
+    #                     for chunk in qa_chain.stream(inputs):
+    #                         # 'chunk' is a dict like {'text': '...'} depending on the prompt
+    #                         # The key might differ depending on your prompt template and model type
+    #                         token = chunk.get("text") or chunk.get("output") or ""
+    #                         full_response += token
+    #                         answer_placeholder.markdown(full_response)
+    #                         st.sleep(0.01)
+
+    #                 except Exception as e:
+    #                     st.error(f"Error during streaming: {e}")
+
+    #             # Suggest images using LLM agent
+    #             suggested_tags = image_suggester_agent(full_response)
+    #             print("Suggested tags:", suggested_tags)
+
+    #             with col2:
+    #                 for tag in suggested_tags:
+    #                     if tag in image_meta:
+    #                         img_info = image_meta[tag]
+    #                         image_path = BASE_DIR / img_info["file"]
+    #                         try:
+    #                             image = Image.open(image_path)
+    #                             #st.image(image, caption=img_info["caption"], use_container_width=True)
+    #                             st.image(image, caption=img_info["caption"], use_column_width=True)
+    #                         except FileNotFoundError:
+    #                             st.error(f"Image not found: {image_path}")
+
+    #     # Save final response to history
+    #     st.session_state.chat_history.append(("RAG Agent", full_response))
 elif tab == "About":
     st.title("ℹ️ About This App")
     st.markdown("""
