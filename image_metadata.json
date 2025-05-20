@@ -3,5 +3,7 @@
   "loan_products": {"file": "images/loan_product_table.PNG", "caption": "Loans and Receivables"},
   "sector_exposure": {"file": "images/loan_exposure_by_industry.png", "caption": "Credit Exposure by Sectors"},
   "nim_trend": {"file": "images/nim_trend.png", "caption": "Emirates NBD NIM Trend"},
-  "fab_nim_comparison": {"file": "images/enbd_fab_nim_trend.png", "caption": "ENBD and FAB NIM Comparison"}
+  "fab_nim_comparison": {"file": "images/enbd_fab_nim_trend.png", "caption": "ENBD and FAB NIM Comparison"},
+  "eibor_nim_comparison": {"file": "images/enbd_nim_eibor.png", "caption": "ENBD NIMs and EIBOR"},
+  "nim_drivers_loan_yield_deposit_cost": {"file": "images/nims_loan_yield_deposit_cost.png", "caption": "ENBD NIMs and EIBOR"}
 }

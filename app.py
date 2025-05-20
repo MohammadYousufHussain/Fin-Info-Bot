@@ -50,6 +50,7 @@ User Question:
 
 Additional Info:
 - Role: {role}. If the role is Financial Reporter, provide information with limited insights. If the role is Research Analyst, then provide detailed insights.
+As a Research Analyst, structure your responses in different sections, highlight correlation of different datasets, provide differentiated insights
 - Detail: {detail}. If detail is less than 4, provide very brief response and if higher than 7 then provide very detailed response.
 - Focus: {focus}
 Today is 5th January 2025.
@@ -68,6 +69,7 @@ User Question:
 
 Additional Info:
 - Role: {role}. If the role is Financial Reporter, provide information with limited insights. If the role is Research Analyst, then provide detailed insights.
+As a Research Analyst, structure your responses in different sections, highlight correlation of different datasets, provide differentiated insights
 - Detail: {detail}. If detail is less than 4, provide very brief response and if higher than 7 then provide very detailed response.
 - Focus: {focus}
 Today is 5th January 2025.
@@ -78,33 +80,41 @@ Keep responses focused and structured."""
 
 def image_suggester_agent(response_text):
     tag_prompt = f"""
-    You are an assistant that analyzes financial explanations and recommends the most relevant image tag(s) from the list below.
+You are an assistant that analyzes financial explanations and recommends the most relevant image tag(s) from the list below.
 
-    Available tags:
-    - total_gross_loan
-    - loan_products
-    - sector_exposure
-    - nim_trend
-    - fab_nim_comparison
+Available tags:
+- total_gross_loan
+- loan_products
+- sector_exposure
+- nim_trend
+- fab_nim_comparison
+- eibor_nim_comparison
+- nim_drivers_loan_yield_deposit_cost
 
-    Based on the following response, return the most relevant tag(s) as a Python list of strings (max 2 tags):
-    ---
-    {response_text}
-    ---
-    """
+Based on the following response, return the most relevant tag(s) as a Python list of strings (max 2 tags):
+---
+{response_text}
+---
+Return only a Python list, nothing else.
+"""
+
     llm = get_llm()
     tag_output = llm.predict(tag_prompt)
-    print('Image suggested tags: ', tag_output)
+    print('Raw tag output:', tag_output)
 
-    # Clean up formatting
-    if isinstance(tag_output, str):
-        tag_output = tag_output.strip()
-        if tag_output.startswith("```"):
-            tag_output = tag_output.strip("`").split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+    # Strip code block markers and whitespace
+    tag_output = tag_output.strip()
+    if tag_output.startswith("```"):
+        tag_output = tag_output.strip("`")  # remove all backticks
+        if "python" in tag_output.lower():
+            tag_output = tag_output.split("\n", 1)[-1]  # remove the first line (```python)
+        if tag_output.endswith("```"):
+            tag_output = tag_output[:-3]
 
+    # Now safely evaluate
     try:
-        tags = eval(tag_output)
-        if isinstance(tags, list):
+        tags = eval(tag_output, {"__builtins__": {}})
+        if isinstance(tags, list) and all(isinstance(tag, str) for tag in tags):
             return tags
     except Exception as e:
         print("Error evaluating tags:", e)
@@ -170,13 +180,30 @@ def load_chain():
         doc.metadata["time frequency"] = "yearly"
         doc.metadata["bank"] = "Emirates NBD (ENBD), First Abu Dhabi Bank (FAB)"
 
+    # Load NIMs drivers data quarterly
+    nims_drivers_data_loader = CSVLoader(file_path="nims_drivers_qtrly.csv")
+    nims_drivers_docs = nims_drivers_data_loader.load()
+    for doc in nims_drivers_docs:
+        doc.metadata["level of detail"] = "quarterly nims, with driver details"
+        doc.metadata["metric"] = "net interest margin (NIMs), loan yield, deposit cost"
+        doc.metadata["time frequency"] = "quarterly"
+        doc.metadata["bank"] = "Emirates NBD (ENBD)"
+
+    # Load EIBOR data quarterly
+    eibor_data_loader = CSVLoader(file_path="eibor_data_qtrly.csv")
+    eibor_data_docs = eibor_data_loader.load()
+    for doc in eibor_data_docs:
+        doc.metadata["level of detail"] = "quarterly eibor"
+        doc.metadata["metric"] = "EIOBR"
+        doc.metadata["time frequency"] = "quarterly"
+        doc.metadata["bank"] = "Emirates NBD (ENBD)"
 
     # Load DOCX
     word_loader = UnstructuredWordDocumentLoader("fs_notes_demo.docx")
     word_docs = word_loader.load()
 
     # Merge both
-    documents = gross_loan_hl_docs + gross_loan_product_details_docs + gross_loan_sector_details_docs + word_docs + nims_docs
+    documents = gross_loan_hl_docs + gross_loan_product_details_docs + gross_loan_sector_details_docs + word_docs + nims_docs + nims_drivers_docs + eibor_data_docs
 
     # Continue with chunking
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
@@ -365,7 +392,7 @@ elif tab == "Chat with FinBot":
 
         with st.spinner("FinBot is thinking..."):
             # Retrieve context (reduce size for speed)
-            docs = retriever.get_relevant_documents(user_query)[:3]
+            docs = retriever.get_relevant_documents(user_query)[:5]
             context = "\n\n".join(doc.page_content[:1000] for doc in docs)
 
             # Choose prompt depending on chat history length
@@ -408,8 +435,8 @@ elif tab == "Chat with FinBot":
                             image_path = BASE_DIR / img_info["file"]
                             try:
                                 image = Image.open(image_path)
-                                st.image(image, caption=img_info["caption"], use_container_width=True)
-                                #st.image(image, caption=img_info["caption"], use_column_width=True)
+                                #st.image(image, caption=img_info["caption"], use_container_width=True)
+                                st.image(image, caption=img_info["caption"], use_column_width=True)
                             except FileNotFoundError:
                                 st.error(f"Image not found: {image_path}")
 
